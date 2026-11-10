@@ -193,6 +193,434 @@
 </script>
 </head>
 <body>
+<!-- ================= INTRO START (direkt nach <body> einfügen) ================= -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Linear+B&family=Noto+Sans+Bamum&family=Noto+Sans+Meroitic&display=block&text=%F0%90%A6%82%F0%96%A8%86%F0%90%80%AA%F0%96%A0%8B%F0%96%A0%8A" />
+<style>
+  #intro {
+    position: fixed; inset: 0; z-index: 2147483000;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 50%, #d6dff6 0%, #d5def5 42%, #cbd2e2 72%, #babfc1 100%);
+    cursor: default;
+  }
+  #intro-vig { position: absolute; inset: 0; pointer-events: none; }
+  #intro-term {
+    position: relative;
+    width: min(92vw, 76ch);
+    font: 400 clamp(11px, 1.15vw, 15px)/1.75 "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    color: var(--intro-ink, #545557);
+    letter-spacing: .02em;
+    transition: transform .75s cubic-bezier(.55,0,.75,.2), opacity .75s ease-in;
+  }
+  #intro-term .ln { min-height: 1.75em; white-space: pre-wrap; word-break: break-word; }
+  #intro-term .ln.art { white-space: nowrap; }
+  #intro-term .ln.hide { visibility: hidden; }
+  #intro-cursor {
+    display: inline-block; width: .62em; height: 1.15em; margin-left: 1px;
+    vertical-align: -0.2em; background: var(--intro-ink, #545557);
+  }
+  #intro-cursor.blink { animation: introBlink 1s steps(1) infinite; }
+  @keyframes introBlink { 50% { opacity: 0; } }
+  #intro.out #intro-term { transform: translateY(-115vh); opacity: 0; }
+
+  /* tanzende Figuren */
+  .intro-dance {
+    display: inline-flex; gap: .35em; color: var(--intro-ink, #545557);
+    font-family: "Noto Sans Meroitic", "Noto Sans Bamum", "Noto Sans Linear B", "SF Mono", Menlo, sans-serif;
+    font-size: 1.7em; line-height: 1;
+  }
+  .intro-dance span { display: inline-block; transform-origin: 50% 90%; }
+  .intro-dance.go span { animation: introDance .62s ease-in-out infinite; }
+  .intro-dance span:nth-child(2) { animation-duration: .55s; animation-delay: -.2s; }
+  .intro-dance span:nth-child(3) { animation-duration: .68s; animation-delay: -.4s; }
+  .intro-dance span:nth-child(4) { animation-duration: .58s; animation-delay: -.1s; }
+  @keyframes introDance {
+    0%   { transform: translateY(0) rotate(-10deg) scaleY(.92); }
+    25%  { transform: translateY(-.28em) rotate(0deg) scaleY(1.06); }
+    50%  { transform: translateY(0) rotate(10deg) scaleY(.92); }
+    75%  { transform: translateY(-.28em) rotate(0deg) scaleY(1.06); }
+    100% { transform: translateY(0) rotate(-10deg) scaleY(.92); }
+  }
+  #intro-dancers {
+    position: fixed; z-index: 2147483001; pointer-events: none;
+    transform-origin: 50% 50%;
+  }
+  .intro-bug {
+    position: fixed; z-index: 2147483001; pointer-events: none;
+    width: 36px; height: 36px; margin: -18px 0 0 -18px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  /* Maus-Hinweis "click to skip" */
+  #intro-hint {
+    position: fixed; left: 66vw; top: 21vh; z-index: 2147483001; pointer-events: none;
+    display: flex; align-items: flex-start; gap: 14px;
+    font: 400 clamp(11px, 1.15vw, 15px)/1 "SF Mono", Menlo, Monaco, Consolas, monospace;
+    color: var(--intro-ink, #545557); letter-spacing: .02em;
+    opacity: 0; transition: opacity .35s ease;
+  }
+  #intro-hint.on { opacity: 1; }
+  #intro-hint svg { width: 36px; height: 51px; image-rendering: pixelated; shape-rendering: crispEdges;
+    transform-origin: 0 0; transition: transform .09s ease; }
+  #intro-hint.press svg { transform: scale(.86) translate(2px, 2px); }
+  #intro-hint .lbl { margin-top: 30px; white-space: nowrap; }
+  .intro-pop {
+    position: fixed; z-index: 2147483001; pointer-events: none;
+    font: 400 clamp(12px, 1.25vw, 16px)/1 "SF Mono", Menlo, Monaco, monospace; color: var(--intro-ink, #545557);
+    transform: translate(-50%, -50%);
+  }
+</style>
+
+<div id="intro" aria-label="Intro – klicken zum Überspringen">
+  <div id="intro-term"></div>
+</div>
+
+<script>
+(function () {
+  var intro = document.getElementById("intro");
+  var term = document.getElementById("intro-term");
+  var INK = "#545557";
+
+  var STARS = ". ݁₊ ⊹ . ݁ ⟡ ݁ . ⊹ ₊ ݁.. ݁₊ ⊹ . ݁ ⟡ ݁ . ⊹ ₊ ݁.. ݁₊ ⊹ . ݁ ⟡ ݁ . ⊹ ₊ ݁.. ݁₊ ⊹ . ݁ ⟡ ݁ . ⊹ ₊ ݁.. ݁₊ ⊹ . ݁ ⟡ ݁ . ⊹ ₊ ݁.";
+  var FLOWERS = "°❀⋆.ೃ࿔*:･⋆˚✿˖°°❀⋆.ೃ࿔*:･❀˖°°❀⋆.ೃ࿔*:･❀˖°°❀⋆.ೃ࿔*:･⋆˚✿˖°°❀⋆.ೃ࿔*:･";
+  var DANCERS = ["𐦂", "𖨆", "𐀪", "𖠋"];
+  var BUG = "𖠊";
+
+  // t = getippter Text, a = ASCII-Zeile (füllt sich schnell), d = tanzende Figuren
+  var SCRIPT = [
+    { t: "this is my portfolio website" },
+    { a: STARS },
+    { t: "my name is Jules" },
+    { a: FLOWERS },
+    { t: "i study communication design" },
+    { a: STARS },
+    { t: "this is my digital playground" },
+    { a: FLOWERS },
+    { t: "you can click an image to view it" },
+    { a: STARS },
+    { t: "you can drag to pin it" },
+    { a: FLOWERS },
+    { t: "and we can get in touch via instagram or mail xD" },
+    { a: STARS },
+    { t: "I coded this website myself, so there might be bugs", bug: true },
+    { a: FLOWERS },
+    { t: "enjoyyy playing around <333" },
+    { d: true }
+  ];
+
+  function chars(s) {
+    if (window.Intl && Intl.Segmenter) {
+      return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(s), function (x) { return x.segment; });
+    }
+    return Array.from(s);
+  }
+
+  /* Farben an die aktuelle Tageszeit-Farbe der Seite anpassen (Tag hell / Nacht dunkel) */
+  function matchSite() {
+    var bg = document.body.style.backgroundColor;
+    if (!bg) return;
+    intro.style.background = bg;
+    var v = document.getElementById("vignetteLayer");
+    if (v && v.style.background) {
+      var vig = document.getElementById("intro-vig") || document.createElement("div");
+      vig.id = "intro-vig";
+      vig.style.background = v.style.background;
+      vig.style.opacity = v.style.opacity || "1";
+      if (!vig.isConnected) intro.insertBefore(vig, intro.firstChild);
+    }
+    var sig = document.getElementById("hubSignature");
+    if (sig && sig.style.color) {
+      INK = sig.style.color;
+      document.documentElement.style.setProperty("--intro-ink", INK);
+      bugSprite = null;
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", matchSite);
+  else matchSite();
+
+  var rows = SCRIPT.map(function (item) {
+    var d = document.createElement("div");
+    d.className = "ln hide" + (item.a ? " art" : "");
+    term.appendChild(d);
+    return d;
+  });
+
+  var cursor = document.createElement("span");
+  cursor.id = "intro-cursor";
+
+  var done = false, timer = null, dancers = null;
+  function wait(ms) { return new Promise(function (r) { timer = setTimeout(r, ms); }); }
+  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Pixel-Käfer ---------- */
+  var bugSprite = null;
+  function makeBugSprite() {
+    var S = 18, c = document.createElement("canvas");
+    c.width = S; c.height = S;
+    var g = c.getContext("2d");
+    g.fillStyle = INK; g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "16px 'Noto Sans Bamum', sans-serif";
+    g.fillText(BUG, S / 2, S / 2 + 1);
+    var img = g.getImageData(0, 0, S, S), p = img.data;
+    for (var i = 0; i < p.length; i += 4) {          // harte Pixelkanten
+      p[i + 3] = p[i + 3] > 110 ? 255 : 0;
+    }
+    g.putImageData(img, 0, 0);
+    bugSprite = c.toDataURL();
+  }
+  var fontsReady = (document.fonts && document.fonts.load)
+    ? document.fonts.load("16px 'Noto Sans Bamum'", BUG + DANCERS.join("")).catch(function () {})
+    : Promise.resolve();
+  fontsReady.then(makeBugSprite);
+
+  function spawnBug(x, y, toRight, delay) {
+    if (!bugSprite) makeBugSprite();
+    var el = document.createElement("img");
+    el.className = "intro-bug"; el.src = bugSprite; el.alt = "";
+    el.style.left = x + "px"; el.style.top = y + "px";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    var tx = toRight ? innerWidth + 80 : -80, ty = -80;
+    var dx = tx - x, dy = ty - y, len = Math.hypot(dx, dy);
+    var ux = dx / len, uy = dy / len;
+    var HOP = 58, H = 18, T = 160, PAUSE = 35;
+    var tilt = Math.atan2(uy, Math.abs(ux)) * 180 / Math.PI * 0.35;   // leicht in Laufrichtung geneigt
+    var flip = toRight ? -1 : 1;                     // nach rechts = gespiegelt
+    var start = null;
+    function f(ts) {
+      if (start === null) start = ts + delay;
+      var t = ts - start;
+      if (t < 0) { requestAnimationFrame(f); return; }
+      el.style.opacity = "1";
+      var cyc = T + PAUSE, n = Math.floor(t / cyc), u = Math.min(1, (t % cyc) / T);
+      var d = (n + u) * HOP;
+      var px = x + ux * d, py = y + uy * d - Math.sin(Math.PI * u) * H;
+      var land = (t % cyc) - T;                      // beim Landen kurz stauchen, beim Absprung strecken
+      var sy = u >= 1 ? (land < PAUSE * 0.5 ? 0.72 : 0.9) : (u < 0.15 ? 1.12 : 1);
+      var rot = u < 1 ? tilt * (toRight ? 1 : -1) * Math.sin(Math.PI * u) : 0;
+      el.style.left = px + "px"; el.style.top = py + "px";
+      el.style.transform = "rotate(" + rot + "deg) scale(" + flip + "," + sy + ")";
+      if (px < -60 || px > innerWidth + 60 || py < -60) { el.remove(); return; }
+      requestAnimationFrame(f);
+    }
+    requestAnimationFrame(f);
+  }
+
+  function releaseBugs() {
+    var r = cursor.getBoundingClientRect();
+    var x = r.left - r.width * 1.5, y = r.top + r.height / 2;   // Mitte des Wortes "bug"
+    spawnBug(x, y, true, 0);
+    spawnBug(x - 10, y, false, 320);
+  }
+
+  /* ---------- Tippen ---------- */
+  async function typeLine(row, item) {
+    row.classList.remove("hide");
+    var span = document.createElement("span");
+    row.appendChild(span);
+    row.appendChild(cursor);
+    cursor.classList.remove("blink");
+    var cs = chars(item.t), bugged = false;
+    for (var i = 0; i < cs.length; i++) {
+      if (done) return;
+      span.textContent += cs[i];
+      if (item.bug && !bugged && /bug$/.test(span.textContent)) { bugged = true; releaseBugs(); }
+      var c = cs[i], ms = (38 + Math.random() * 62) / 1.5;
+      if (c === " ") ms += 17;
+      if (c === "," || c === ".") ms += 95;
+      if (Math.random() < 0.04) ms += 150;
+      await wait(reduced ? 4 : ms);
+    }
+    cursor.classList.add("blink");
+    await wait(reduced ? 60 : 380);
+  }
+
+  // ASCII-Zeile so klein setzen, dass sie komplett in eine Zeile passt
+  function fitArt(row, text) {
+    var base = parseFloat(getComputedStyle(term).fontSize);
+    row.style.minHeight = (base * 1.75) + "px";
+    row.style.lineHeight = (base * 1.75) + "px";
+    row.textContent = text;
+    var need = row.scrollWidth, have = row.clientWidth;
+    if (need > have) row.style.fontSize = (base * have / need * 0.98) + "px";
+    row.textContent = "";
+  }
+
+  async function printArt(row, text) {
+    fitArt(row, text);
+    row.classList.remove("hide");
+    var cs = chars(text), out = "";
+    for (var i = 0; i < cs.length; i += 3) {
+      if (done) return;
+      out += cs.slice(i, i + 3).join("");
+      row.textContent = out;
+      await wait(16);
+    }
+    await wait(reduced ? 40 : 140);
+  }
+
+  async function printDancers(row) {
+    row.classList.remove("hide");
+    dancers = document.createElement("span");
+    dancers.className = "intro-dance";
+    row.appendChild(dancers);
+    for (var i = 0; i < DANCERS.length; i++) {
+      if (done) return;
+      var s = document.createElement("span");
+      s.textContent = DANCERS[i];
+      dancers.appendChild(s);
+      await wait(70);
+    }
+  }
+
+  /* ---------- Pixel-Maus mit "click to skip" (läuft parallel zum Intro) ---------- */
+  var ARROW = [
+    "X           ",
+    "XX          ",
+    "X.X         ",
+    "X..X        ",
+    "X...X       ",
+    "X....X      ",
+    "X.....X     ",
+    "X......X    ",
+    "X.......X   ",
+    "X........X  ",
+    "X.....XXXXX ",
+    "X..X..X     ",
+    "X.X X..X    ",
+    "XX  X..X    ",
+    "X    X..X   ",
+    "     X..X   ",
+    "      XX    "
+  ];
+  function arrowSVG() {
+    var r = "";
+    ARROW.forEach(function (row, y) {
+      for (var x = 0; x < row.length; x++) {
+        if (row[x] === "X") r += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="#1d1d1f"/>';
+        if (row[x] === ".") r += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="#fbfbfb"/>';
+      }
+    });
+    return '<svg viewBox="0 0 12 17" xmlns="http://www.w3.org/2000/svg">' + r + "</svg>";
+  }
+  function skipHint() {
+    if (reduced) return;
+    var h = document.createElement("div");
+    h.id = "intro-hint";
+    h.innerHTML = arrowSVG() + '<span class="lbl">click to skip</span>';
+    document.body.appendChild(h);
+    requestAnimationFrame(function () { h.classList.add("on"); });
+    setTimeout(function () {                        // einmal klicken …
+      if (!h.isConnected) return;
+      h.classList.add("press");
+      var b = h.querySelector("svg").getBoundingClientRect();
+      popStars(b.left + 2, b.top + 2);              // … an der Pfeilspitze
+      setTimeout(function () { h.classList.remove("press"); }, 140);
+    }, 1100);
+    setTimeout(function () { h.classList.remove("on"); }, 2300);   // … und wieder weg
+    setTimeout(function () { h.remove(); }, 2750);
+  }
+  function popStars(x, y) {
+    var STAR = ["⊹", "₊", "⋆", "⊹", "₊", "⋆", "⊹", "⋆"];
+    STAR.forEach(function (ch, k) {
+      var el = document.createElement("span");
+      el.className = "intro-pop"; el.textContent = ch;
+      el.style.left = x + "px"; el.style.top = y + "px";
+      document.body.appendChild(el);
+      var a = (k / STAR.length) * Math.PI * 2 - Math.PI / 2, R = 30 + (k % 2) * 8, t0 = null;
+      (function f(ts) {
+        if (t0 === null) t0 = ts;
+        var p = Math.min(1, (ts - t0) / 650), e = 1 - Math.pow(1 - p, 3);
+        el.style.left = (x + Math.cos(a) * R * e) + "px";
+        el.style.top = (y + Math.sin(a) * R * e) + "px";
+        el.style.opacity = String(p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4);
+        el.style.transform = "translate(-50%,-50%) scale(" + (0.4 + 0.9 * Math.sin(Math.PI * Math.min(1, p * 1.3))) + ")";
+        if (p < 1) requestAnimationFrame(f); else el.remove();
+      })(performance.now());
+    });
+  }
+
+  async function run() {
+    await fontsReady;
+    await wait(reduced ? 100 : 600);
+    for (var i = 0; i < SCRIPT.length; i++) {
+      if (done) return;
+      var it = SCRIPT[i];
+      if (it.t) await typeLine(rows[i], it);
+      else if (it.a) { if (i === 1) skipHint(); await printArt(rows[i], it.a); }
+      else await printDancers(rows[i]);
+    }
+    cursor.remove();
+    await wait(reduced ? 200 : 1300);               // kurz zuschauen, wie sie tanzen
+    finish();
+  }
+
+  /* ---------- Ausgang: Text fährt raus, Figuren bleiben in der Mitte ---------- */
+  var holder = null;
+  function finish() {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    var hint = document.getElementById("intro-hint");
+    if (hint) hint.remove();
+    if (dancers && dancers.isConnected) {
+      var r = dancers.getBoundingClientRect();
+      holder = document.createElement("div");
+      holder.id = "intro-dancers";
+      holder.style.left = r.left + "px"; holder.style.top = r.top + "px";
+      holder.style.fontSize = getComputedStyle(term).fontSize;
+      document.body.appendChild(holder);
+      holder.appendChild(dancers);
+      var dx = innerWidth / 2 - (r.left + r.width / 2), dy = innerHeight / 2 - (r.top + r.height / 2);
+      dancers.classList.add("go");                  // jetzt fangen sie an zu tanzen …
+      var SUCK = reduced ? 300 : 1500, s0 = null;
+      (function suck(ts) {                          // … und werden nach hinten zur Mitte gesaugt
+        if (!holder.isConnected) return;
+        if (s0 === null) s0 = ts;
+        var q = Math.min(1, (ts - s0) / SUCK), s = q * q * q;
+        holder.style.transform = "translate(" + (dx * s) + "px," + (dy * s) + "px) scale(" + (1 - s) + ")";
+        holder.style.opacity = String(1 - Math.max(0, (q - 0.75) / 0.25));
+        if (q < 1) requestAnimationFrame(suck); else holder.remove();
+      })(performance.now());
+    }
+    intro.classList.add("out");
+    setTimeout(zoom, reduced ? 50 : 650);
+  }
+
+  function zoom() {
+    var site = document.getElementById("portfolio");
+    var D = reduced ? 300 : 1400, t0 = null;
+    var maxR = Math.hypot(innerWidth, innerHeight) / 2 + 120;
+    function ease(x) { return 1 - Math.pow(1 - x, 4); }
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / D), e = ease(p);
+      var r = e * maxR;
+      var m = "radial-gradient(circle at 50% 50%, transparent " + r + "px, #000 " + (r + 90) + "px)";
+      intro.style.webkitMaskImage = m;
+      intro.style.maskImage = m;
+      intro.style.transform = "scale(" + (1 + e * 0.6) + ")";
+      if (site) {
+        site.style.transform = "scale(" + (0.55 + 0.45 * e) + ")";
+        site.style.filter = "blur(" + ((1 - e) * 8).toFixed(2) + "px)";
+      }
+      if (p < 1) requestAnimationFrame(frame);
+      else {
+        intro.remove();
+        if (holder) holder.remove();
+        if (site) { site.style.transform = ""; site.style.filter = ""; }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  intro.addEventListener("click", finish);
+  addEventListener("keydown", function (e) {
+    if (!done && (e.key === "Enter" || e.key === "Escape" || e.key === " ")) finish();
+  });
+
+  run();
+})();
+</script>
+<!-- ================= INTRO ENDE ================= -->
   <div class="hub-signature" id="hubSignature">
     <div class="name">Jules // Jule Cristina Freyer</div>
     <div class="contact">
