@@ -267,6 +267,12 @@
     font: 400 clamp(12px, 1.25vw, 16px)/1 "SF Mono", Menlo, Monaco, monospace; color: var(--intro-ink, #545557);
     transform: translate(-50%, -50%);
   }
+  .intro-flower {
+    position: fixed; z-index: 2147483001; pointer-events: none;
+    font: 400 clamp(12px, 1.25vw, 16px)/1 "SF Mono", Menlo, Monaco, monospace; color: var(--intro-ink, #545557);
+    transform: translate(-50%, -50%); white-space: pre;
+    transition: opacity .6s ease;
+  }
 </style>
 
 <div id="intro" aria-label="Intro – klicken zum Überspringen">
@@ -300,7 +306,7 @@
     { a: FLOWERS },
     { t: "and we can get in touch via instagram or mail xD" },
     { a: STARS },
-    { t: "I coded this website myself, so there might be bugs", bug: true },
+    { t: "I made this website myself, so there might be bugs", bug: true },
     { a: FLOWERS },
     { t: "enjoyyy playing around <333" },
     { d: true }
@@ -612,6 +618,9 @@
     requestAnimationFrame(frame);
   }
 
+  // Für die Klick-Effekte auf der Seite: exakt dieselben Sterne & Blumen wie im Intro
+  window.INTRO_FX = { popStars: popStars, flowers: chars(FLOWERS) };
+
   intro.addEventListener("click", finish);
   addEventListener("keydown", function (e) {
     if (!done && (e.key === "Enter" || e.key === "Escape" || e.key === " ")) finish();
@@ -837,6 +846,29 @@
     const CATEGORY_PHASES = {};
     CATEGORIES.forEach((c) => { CATEGORY_PHASES[c.id] = buildPhaseSet(c.color); });
 
+    // Weiche S-Kurve zwischen zwei Ankerzeiten (kein Knick beim Übergang)
+    const smooth = (t) => t * t * (3 - 2 * t);
+
+    // Allgemeiner Anker-Interpolator: anchors = [[stunde, wert], ...] aufsteigend
+    function lerpAnchors(h, anchors) {
+      for (let i = 0; i < anchors.length - 1; i += 1) {
+        const [h0, v0] = anchors[i];
+        const [h1, v1] = anchors[i + 1];
+        if (h >= h0 && h <= h1) return v0 + (v1 - v0) * smooth((h - h0) / (h1 - h0));
+      }
+      return anchors[0][1];
+    }
+
+    // Schriftfarbe der Startseite/Intro nach Uhrzeit: tagsüber dunkelgrau,
+    // wird zum Abend hin immer dunkler und ist ab ca. 21:30 schwarz.
+    function textLightnessForTime(date) {
+      let h = date.getHours() + date.getMinutes() / 60;
+      if (h < 6) h += 24; // Bereich 6..30 Uhr
+      return lerpAnchors(h, [
+        [6, 0.32], [12, 0.26], [16, 0.18], [19, 0.08], [21.5, 0.0], [29, 0.0], [30, 0.32],
+      ]);
+    }
+
     // Anker: [Stunde, Phase] — Stunde 28 = 4 Uhr des Folgetags (Wrap-around)
     function getTimeColor(date, phases) {
       let h = date.getHours() + date.getMinutes() / 60;
@@ -851,7 +883,7 @@
         const [h0, c0] = anchors[i];
         const [h1, c1] = anchors[i + 1];
         if (h >= h0 && h <= h1) {
-          const t = (h - h0) / (h1 - h0);
+          const t = smooth((h - h0) / (h1 - h0));
           return c0.clone().lerp(c1, t);
         }
       }
@@ -872,9 +904,21 @@
       return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
     }
 
-    function computeVignette(date, baseHex) {
+    function computeVignette(date, baseHex, isHub = false) {
       let h = date.getHours() + date.getMinutes() / 60;
       if (h < 6) h += 24; // Ankerbereich 6..30 Uhr
+
+      // Erste Sphäre (Hub): Ecken tagsüber hellrot, abends rot —
+      // dazwischen ganz langsam über mehrere Stunden überblendet.
+      if (isHub) {
+        const lightness = lerpAnchors(h, [
+          [6, 0.80], [14, 0.78], [17, 0.64], [20, 0.46], [24, 0.42], [28, 0.44], [30, 0.80],
+        ]);
+        const alpha = lerpAnchors(h, [
+          [6, 0.55], [14, 0.55], [20, 0.70], [28, 0.70], [30, 0.55],
+        ]);
+        return { color: new THREE.Color().setHSL(0.0, 0.82, lightness), alpha };
+      }
 
       // Immer die Komplementärfarbe der Welt — nur Helligkeit und Intensität
       // wandern über den Tag: morgens heller, mittags dunkler (gleicher
@@ -890,7 +934,7 @@
       for (let i = 0; i < anchors.length - 1; i += 1) {
         if (h >= anchors[i][0] && h <= anchors[i + 1][0]) { seg = anchors[i]; next = anchors[i + 1]; break; }
       }
-      const t = (h - seg[0]) / (next[0] - seg[0]);
+      const t = smooth((h - seg[0]) / (next[0] - seg[0]));
       const lightness = seg[1].lightness + (next[1].lightness - seg[1].lightness) * t;
       const alpha = seg[1].alpha + (next[1].alpha - seg[1].alpha) * t;
 
@@ -1515,15 +1559,11 @@
         // Jede Welt baut sich stattdessen wie ursprünglich erst beim Betreten auf
         // (siehe ensureCategorySphere(), aufgerufen aus enterCategory()).
         this.updateBackgroundColor(true);
-        this.lastUpdateHour = new Date().getHours();
-        // Nur bei echtem Stundenwechsel neu einfärben (nicht jede Minute) —
-        // dafür mit einem langen, sanften Übergang statt einem Sprung.
+        // Jede Minute ganz leicht nachführen (langer, weicher Übergang) —
+        // so wandern Farben über den Tag fließend statt stündlich zu springen.
         setInterval(() => {
-          const nowHour = new Date().getHours();
-          if (nowHour !== this.lastUpdateHour) {
-            this.lastUpdateHour = nowHour;
-            this.updateBackgroundColor(false, 8000);
-          }
+          if (this.state === "transitioning") return;
+          this.updateBackgroundColor(false, 20000);
         }, 60000);
 
         this.startTime = performance.now();
@@ -2183,12 +2223,15 @@
       }
 
       /* ---------- Tageszeit-Hintergrund, Vignette & Textkontrast ---------- */
-      updateBackgroundColor(instant, duration = 1200) {
+      updateBackgroundColor(instant, duration = 2600) {
         const phases = this.activeCategory ? CATEGORY_PHASES[this.activeCategory.id] : NEUTRAL_PHASES;
         const baseHex = this.activeCategory ? this.activeCategory.color : NEUTRAL_BASE_HEX;
         const now = new Date();
         const target = getTimeColor(now, phases);
-        const vignetteTarget = computeVignette(now, baseHex);
+        const vignetteTarget = computeVignette(now, baseHex, !this.activeCategory);
+        const textTarget = textLightnessForTime(now);
+        if (this.textLightness === undefined) this.textLightness = textTarget;
+        const token = (this.bgAnimToken = (this.bgAnimToken || 0) + 1); // ältere Übergänge abbrechen
 
         if (!this.bodyColor) this.bodyColor = target.clone();
         if (!this.vignetteColor) this.vignetteColor = vignetteTarget.color.clone();
@@ -2198,8 +2241,14 @@
           document.body.style.backgroundColor = `#${this.bodyColor.getHexString()}`;
           if (this.scene.fog) this.scene.fog.color.copy(this.bodyColor);
 
+          // Weicher, mehrstufiger Verlauf statt einer harten Kante
+          const vr = Math.round(this.vignetteColor.r * 255);
+          const vg = Math.round(this.vignetteColor.g * 255);
+          const vb = Math.round(this.vignetteColor.b * 255);
+          const vc = (a) => `rgba(${vr},${vg},${vb},${a})`;
           this.vignetteEl.style.background =
-            `radial-gradient(ellipse at center, transparent 58%, #${this.vignetteColor.getHexString()} 132%)`;
+            `radial-gradient(ellipse at center, ${vc(0)} 40%, ${vc(0.06)} 55%, ${vc(0.18)} 68%, ` +
+            `${vc(0.38)} 82%, ${vc(0.62)} 98%, ${vc(0.85)} 115%, ${vc(1)} 135%)`;
           this.vignetteEl.style.opacity = this.vignetteAlpha;
 
           // Schrift bleibt IMMER neutral (reines Grau/Weiß/Schwarz, nie farbig) —
@@ -2207,8 +2256,11 @@
           // heller Hintergrund (Tag) -> dunkle Schrift, dunkler Hintergrund
           // (Nacht) -> helle Schrift.
           const lum = relativeLuminance(this.bodyColor);
-          const textLightness = Math.min(0.92, Math.max(0.14, 1 - lum));
-          this.hubSignatureEl.style.color = `hsl(0, 0%, ${(textLightness * 100).toFixed(1)}%)`;
+          const textLightness = Math.min(0.92, Math.max(0.14, 1 - lum)); // nur noch für die Analog-Spirale
+          // Signatur/Intro-Schrift: nach Uhrzeit, wird zum Abend hin schwarz
+          const inkColor = `hsl(0, 0%, ${(this.textLightness * 100).toFixed(1)}%)`;
+          this.hubSignatureEl.style.color = inkColor;
+          document.documentElement.style.setProperty("--intro-ink", inkColor);
 
           if (this.analogSpiral) {
             const grayColor = new THREE.Color().setHSL(0, 0, textLightness);
@@ -2221,6 +2273,7 @@
           this.bodyColor.copy(target);
           this.vignetteColor.copy(vignetteTarget.color);
           this.vignetteAlpha = vignetteTarget.alpha;
+          this.textLightness = textTarget;
           this.scene.fog = new THREE.Fog(target.getHex(), 9, 20);
           applyFrame();
           return;
@@ -2229,13 +2282,16 @@
         const fromBody = this.bodyColor.clone();
         const fromVignette = this.vignetteColor.clone();
         const fromAlpha = this.vignetteAlpha;
+        const fromText = this.textLightness;
         const start = performance.now();
         const step = (now2) => {
+          if (token !== this.bgAnimToken) return; // ein neuerer Übergang hat übernommen
           const t = Math.min((now2 - start) / duration, 1);
           const e = easeInOutCubic(t);
           this.bodyColor.copy(fromBody).lerp(target, e);
           this.vignetteColor.copy(fromVignette).lerp(vignetteTarget.color, e);
           this.vignetteAlpha = fromAlpha + (vignetteTarget.alpha - fromAlpha) * e;
+          this.textLightness = fromText + (textTarget - fromText) * e;
           applyFrame();
           if (t < 1) requestAnimationFrame(step);
         };
@@ -2334,11 +2390,76 @@
     appEl.appendChild(portfolioEl);
 
     try {
-      new Engine(portfolioEl);
+      window.portfolioEngine = new Engine(portfolioEl);
     } catch (error) {
       console.error("Portfolio konnte nicht gestartet werden:", error);
       portfolioEl.innerHTML = '<p class="error-message">Die 3D-Galerie konnte nicht geladen werden.</p>';
     }
+  </script>
+  <script>
+  /* ===================================================================
+     KLICK-EFFEKTE
+     - Jeder Klick: die Intro-Sterne ploppen um den Mauszeiger auf
+     - Ins Leere klicken & gedrückt halten: Spur aus den Intro-Blumen,
+       die nach 3 Sekunden verschwindet (zum Malen/Schreiben)
+     =================================================================== */
+  (function () {
+    var FLOWER_LIFE = 3000;   // ms sichtbar
+    var FADE = 600;           // ms Ausblenden
+    var trail = null;
+
+    function fx() { return window.INTRO_FX; }
+
+    function isEmptySpot(e) {
+      var eng = window.portfolioEngine;
+      if (!eng || document.getElementById("intro")) return false;
+      if (!(e.target instanceof HTMLCanvasElement)) return false;   // Buttons, Links, Pins-UI etc. ausgenommen
+      if (eng.hovered || eng.hoveredPin || eng.isItemFocused) return false;
+      if (eng.state === "transitioning") return false;
+      return true;
+    }
+
+    function placeFlower(x, y) {
+      var f = fx(); if (!f) return;
+      var el = document.createElement("span");
+      el.className = "intro-flower";
+      el.textContent = f.flowers[trail.idx % f.flowers.length];
+      trail.idx += 1;
+      el.style.left = x + "px"; el.style.top = y + "px";
+      document.body.appendChild(el);
+      setTimeout(function () { el.style.opacity = "0"; }, FLOWER_LIFE);
+      setTimeout(function () { el.remove(); }, FLOWER_LIFE + FADE);
+    }
+
+    function stepSize() {
+      return Math.max(9, Math.min(15, innerWidth * 0.0105));    // ~ Zeichenbreite der Intro-Schrift
+    }
+
+    addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      var f = fx();
+      if (f) f.popStars(e.clientX, e.clientY);
+      if (isEmptySpot(e)) {
+        trail = { x: e.clientX, y: e.clientY, idx: 0, id: e.pointerId };
+        placeFlower(e.clientX, e.clientY);
+      }
+    }, true);
+
+    addEventListener("pointermove", function (e) {
+      if (!trail || e.pointerId !== trail.id) return;
+      var dx = e.clientX - trail.x, dy = e.clientY - trail.y;
+      var dist = Math.hypot(dx, dy), s = stepSize();
+      while (dist >= s) {                                        // gleichmäßig entlang des Weges auffüllen
+        trail.x += dx / dist * s; trail.y += dy / dist * s;
+        placeFlower(trail.x, trail.y);
+        dx = e.clientX - trail.x; dy = e.clientY - trail.y; dist = Math.hypot(dx, dy);
+      }
+    }, true);
+
+    function end(e) { if (trail && e.pointerId === trail.id) trail = null; }
+    addEventListener("pointerup", end, true);
+    addEventListener("pointercancel", end, true);
+  })();
   </script>
 </body>
 </html>
